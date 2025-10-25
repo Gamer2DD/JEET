@@ -1566,12 +1566,11 @@
                                             <feMergeNode in="coloredBlur" />
                                             <feMergeNode in="SourceGraphic" />
                                         </feMerge>
-                                    </filter>
-                                </defs>
-                                <line class="cord" x1="50" y1="0" x2="50" y2="30" />
-                                <rect class="lamp-base" x="35" y="30" width="30" height="10" rx="2" />
-                                <path class="lamp-shade" d="M30 40 L70 40 L80 80 L20 80 Z" />
-                                <circle class="lamp_tongue" cx="50" cy="85" r="15" />
+                                    </defs>
+                                    <line class="cord" x1="50" y1="0" x2="50" y2="30" />
+                                    <rect class="lamp-base" x="35" y="30" width="30" height="10" rx="2" />
+                                    <path class="lamp-shade" d="M30 40 L70 40 L80 80 L20 80 Z" />
+                                    <circle class="lamp_tongue" cx="50" cy="85" r="15" />
                             </svg>
                             <div class="light-beam"></div>
                         </div>
@@ -1860,10 +1859,9 @@
                         <div class="form-check form-switch"> <input class="form-check-input" type="checkbox"
                                 role="switch" id="notificationSwitchEl" checked> </div>
                     </label>
-                    <a href="#"
-                        class="list-group-item list-group-item-action d-flex justify-content-between align-items-center interactive-list-item"
-                        data-policy="refer"> <span><i class="bi bi-person-plus-fill"></i> Refer & Earn</span> <i
-                            class="bi bi-chevron-right"></i> </a>
+                    
+                    <!-- REMOVED: Refer & Earn container as requested -->
+                    
                     <a href="#"
                         class="list-group-item list-group-item-action d-flex justify-content-between align-items-center interactive-list-item"
                         data-policy="privacy"> <span><i class="bi bi-shield-lock-fill"></i> Privacy Policy</span><i
@@ -3232,21 +3230,14 @@
                  case 'terms': title = 'Terms and Conditions'; modalBodyContent = appSettings.policyTerms || 'Content not available.'; break;
                  case 'refund': title = 'Refund and Cancellation'; modalBodyContent = appSettings.policyRefund || 'Content not available.'; break;
                  case 'fairPlay': title = 'Fair Play Policy'; modalBodyContent = appSettings.policyFairPlay || 'Content not available.'; break;
-                 case 'refer':
-                     title = 'Refer & Earn';
-                     if (!currentUser) { showNotification("Login to view referral.", 'warning'); return; }
-                     const refCode = userProfile.referralCode || 'N/A';
-                     const refBonus = appSettings?.referralBonus || 0; 
-                     const refDesc = appSettings?.referralDescription || `Get ₹${refBonus} when your friend joins using your code.`; 
-                     modalBodyContent = `<div class="text-center"><h4>Refer Friends!</h4><p class="text-secondary">Share code & earn!</p><div class="my-4 p-3" style="background: var(--primary-bg); border-radius: 8px;"><p class="small text-secondary mb-1">Your Code:</p><h3 class="text-accent referral-code" id="referralCodeDisplay">${refCode}</h3><div class="mt-3"><button class="btn btn-sm btn-custom btn-custom-secondary me-2 copy-btn" data-target="#referralCodeDisplay"><i class="bi bi-clipboard"></i> Copy</button><button class="btn btn-sm btn-custom btn-custom-secondary" id="shareReferralBtn"><i class="bi bi-share-fill"></i> Share</button></div></div><p class="mt-3 small text-secondary">${refDesc}</p></div>`;
-                     break;
+                 // case 'refer': block REMOVED as requested
                  default:
                      title = 'Info';
                      modalBodyContent = '<p>Content unavailable.</p>';
              }
 
              elements.policyModalTitle.textContent = title;
-             if (typeof modalBodyContent === 'string' && policyType !== 'refer') {
+             if (typeof modalBodyContent === 'string' /* && policyType !== 'refer' */) {
                  elements.policyModalBody.innerHTML = modalBodyContent.replace(/\n/g, '<br>');
              } else {
                  elements.policyModalBody.innerHTML = modalBodyContent; 
@@ -3254,7 +3245,7 @@
              elements.policyModalInstance.show();
          }
 
-        // *** NEW: Notification Functions ***
+        // *** NEW: Notification Functions (Modified) ***
 
         /**
          * Loads and displays all notifications, updates the last seen timestamp.
@@ -3277,7 +3268,6 @@
                     .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
                 let notifHtml = '';
-                let newNotifCount = 0;
                 const lastSeen = userProfile.lastSeenNotificationsTimestamp || 0;
                 
                 if (sortedNotifs.length > 0) {
@@ -3287,7 +3277,6 @@
                         // [FIX END]
                         
                         const isNew = (n.timestamp > lastSeen);
-                        if (isNew) newNotifCount++;
                         
                         const timeString = n.timestamp ? new Date(n.timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'N/A';
                         
@@ -3308,11 +3297,14 @@
                 elements.notificationListBody.innerHTML = notifHtml;
 
                 // Update last seen timestamp in user profile on modal display
+                // Note: We use a simple timestamp update here. This will trigger the realtime listener
+                // which will then re-evaluate the unread count to 0, clearing the badge.
                 if (currentUser && lastSeen < Date.now()) {
                     await update(ref(db, `users/${currentUser.uid}`), { lastSeenNotificationsTimestamp: Date.now() });
                 }
                 
                 // Final update to local state and badge after successful fetch/update
+                // This is redundant if the profile listener is working, but acts as a fallback/immediate UI refresh
                 unreadNotificationCount = 0;
                 updateNotificationBadge();
                 
@@ -3324,14 +3316,13 @@
 
         /**
          * Checks the total number of notifications greater than the user's lastSeenTimestamp.
+         * MODIFIED to trigger a toast when new notifications arrive.
          */
         function checkUnreadNotifications(lastSeenTimestamp) {
             if (!db || !elements.notificationBadge) return;
             
             // Query: notifications ordered by timestamp, only fetch those newer than lastSeenTimestamp
             const notifsRef = ref(db, 'notifications');
-            // We use onValue on the whole node, but filter and count manually.
-            // For a large database, a dedicated counter in admin should be used, but this is simpler.
             
             const listenerKey = 'globalNotifications';
             // Detach previous listener if exists (from a previous login/session)
@@ -3342,6 +3333,8 @@
             
             const listFunc = onValue(notifsRef, (snapshot) => {
                 let count = 0;
+                const previousUnreadCount = unreadNotificationCount; // NEW: Store previous count
+                
                 if (snapshot.exists()) {
                     snapshot.forEach(childSnapshot => {
                         const timestamp = childSnapshot.val().timestamp || 0;
@@ -3350,6 +3343,13 @@
                         }
                     });
                 }
+                
+                // NEW LOGIC: Trigger toast notification if the unread count increases AND is > 0
+                // This will fire when an admin pushes a new notification in real-time.
+                if (count > previousUnreadCount && count > 0 && previousUnreadCount >= 0) {
+                    showNotification('New Admin Notification Received!', 'info');
+                }
+                
                 unreadNotificationCount = count;
                 updateNotificationBadge();
             }, (error) => {
