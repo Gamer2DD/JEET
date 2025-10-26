@@ -3249,15 +3249,21 @@
 
         /**
          * Loads and displays all notifications, updates the last seen timestamp.
+         * @param {boolean} shouldShowModal - Prevents modal.show() when called from the shown.bs.modal event handler.
          */
-        async function loadAndDisplayNotifications() {
+        async function loadAndDisplayNotifications(shouldShowModal = true) {
             if (!currentUser || !elements.notificationListModalInstance || !elements.notificationListBody) return;
 
             elements.notificationListBody.innerHTML = '<div class="text-center p-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-2 text-secondary">Loading notifications...</p></div>';
-            elements.notificationListModalInstance.show();
+            
+            // FIX 1: Only show the modal if this is the initial click
+            if (shouldShowModal) {
+                elements.notificationListModalInstance.show(); 
+            }
             
             try {
                 // Fetch all notifications, ordered by timestamp descending
+                // Note: Using get() here for first display, but onValue (in checkUnreadNotifications) is for real-time badge updates.
                 const q = query(ref(db, 'notifications'), orderByChild('timestamp'));
                 const snapshot = await get(q);
                 const notifications = snapshot.val() || {};
@@ -3272,10 +3278,7 @@
                 
                 if (sortedNotifs.length > 0) {
                     sortedNotifs.forEach(n => {
-                        // [FIX START] Define a robust message variable to check for 'message', 'body', or a default
                         const messageContent = n.message || n.body || 'No message content available.';
-                        // [FIX END]
-                        
                         const isNew = (n.timestamp > lastSeen);
                         
                         const timeString = n.timestamp ? new Date(n.timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'N/A';
@@ -3297,14 +3300,13 @@
                 elements.notificationListBody.innerHTML = notifHtml;
 
                 // Update last seen timestamp in user profile on modal display
-                // Note: We use a simple timestamp update here. This will trigger the realtime listener
-                // which will then re-evaluate the unread count to 0, clearing the badge.
+                // This will trigger the realtime listener (which checks unread count) and clear the badge
                 if (currentUser && lastSeen < Date.now()) {
                     await update(ref(db, `users/${currentUser.uid}`), { lastSeenNotificationsTimestamp: Date.now() });
                 }
                 
                 // Final update to local state and badge after successful fetch/update
-                // This is redundant if the profile listener is working, but acts as a fallback/immediate UI refresh
+                // This is mostly redundant due to the user profile listener but ensures immediate badge clearance
                 unreadNotificationCount = 0;
                 updateNotificationBadge();
                 
@@ -3321,7 +3323,6 @@
         function checkUnreadNotifications(lastSeenTimestamp) {
             if (!db || !elements.notificationBadge) return;
             
-            // Query: notifications ordered by timestamp, only fetch those newer than lastSeenTimestamp
             const notifsRef = ref(db, 'notifications');
             
             const listenerKey = 'globalNotifications';
@@ -3333,7 +3334,7 @@
             
             const listFunc = onValue(notifsRef, (snapshot) => {
                 let count = 0;
-                const previousUnreadCount = unreadNotificationCount; // NEW: Store previous count
+                const previousUnreadCount = unreadNotificationCount;
                 
                 if (snapshot.exists()) {
                     snapshot.forEach(childSnapshot => {
@@ -3344,14 +3345,14 @@
                     });
                 }
                 
-                // NEW LOGIC: Trigger toast notification if the unread count increases AND is > 0
-                // This will fire when an admin pushes a new notification in real-time.
-                if (count > previousUnreadCount && count > 0 && previousUnreadCount >= 0) {
-                    showNotification('New Admin Notification Received!', 'info');
+                // CORE FIX for immediate automatic refresh: 
+                // Trigger toast notification if the unread count increases AND is > 0
+                if (count > previousUnreadCount && count > 0) {
+                    showNotification(`You have ${count} new notification(s)!`, 'info');
                 }
                 
                 unreadNotificationCount = count;
-                updateNotificationBadge();
+                updateNotificationBadge(); // Immediately updates the bell icon
             }, (error) => {
                 console.error("Realtime notification listener failed:", error);
                 unreadNotificationCount = -1; // Indicate error
@@ -3483,11 +3484,39 @@
              // *** MODIFIED: Notification Button to open modal ***
              elements.notificationBtn?.addEventListener('click', () => {
                  if (currentUser) {
-                     loadAndDisplayNotifications();
+                     loadAndDisplayNotifications(true); 
                  } else {
                      showNotification('Login to view notifications.', 'warning');
                  }
              });
+             
+             // *** ADDED FIX: Modal open/close listeners for real-time and immediate data refresh ***
+             if (elements.notificationListModalInstance) {
+                 const modalEl = getElement('notificationListModalEl');
+
+                 // FIX 2: Force data reload AFTER the modal is visually open (to get fresh list instantly)
+                 modalEl.addEventListener('shown.bs.modal', () => {
+                      if (currentUser) {
+                          // Call function again, but prevent re-showing the modal (false)
+                          loadAndDisplayNotifications(false); 
+                      }
+                 });
+
+                 // FIX 3: Ensure main sections are up-to-date after modal is dismissed
+                 modalEl.addEventListener('hidden.bs.modal', () => {
+                     if (currentUser) {
+                         // Force a reload of the current section's data
+                         if (currentSectionId === 'home-section') loadHomePageData();
+                         else if (currentSectionId === 'wallet-section') loadWalletData();
+                         else if (currentSectionId === 'tournaments-section' && currentTournamentGameId) {
+                              const activeStatus = querySel('.tournament-tabs .tab-item.active')?.dataset.status || 'upcoming';
+                              filterTournaments(currentTournamentGameId, activeStatus);
+                         }
+                     }
+                 });
+             }
+             // END ADDED FIX
+
              elements.allTransactionsBtn?.addEventListener('click', loadTransactionHistory);
              elements.viewEarningsHistoryBtn?.addEventListener('click', loadTransactionHistory);
 
