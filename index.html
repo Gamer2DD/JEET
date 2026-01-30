@@ -1514,6 +1514,35 @@
         #googleSignInBtnMainEl {
             display: none;
         }
+         /* WhatsApp Floating Button */
+  .whatsapp-btn {
+    position: fixed;
+    bottom: 85px; /* Positioned above the bottom navigation */
+    right: 20px;
+    background: #25D366;
+    color: white !important;
+    padding: 12px 20px;
+    font-size: 16px;
+    text-decoration: none;
+    border-radius: 50px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+    z-index: 9999; /* Ensures it stays on top of all sections */
+    transition: all 0.3s ease;
+  }
+
+  .whatsapp-btn:hover {
+    background: #1ebe5d;
+    transform: scale(1.05);
+    color: white;
+  }
+
+  /* Hide button when login is active to keep UI clean */
+  body.login-active .whatsapp-btn {
+    display: none;
+  }
     </style>
 </head>
 
@@ -3569,6 +3598,11 @@
          });
 
     </script>
-
+<!-- WhatsApp Support Button -->
+<a class="whatsapp-btn" 
+   href="https://wa.me/7045144106?text=Hello%20Support%2C%20I%20need%20help" 
+   target="_blank">
+   <i class="bi bi-whatsapp"></i> WhatsApp Support
+</a>
 </body>
 </html>
